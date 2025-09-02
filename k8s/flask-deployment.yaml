@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dadjokes-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: dadjokes
+  template:
+    metadata:
+      labels:
+        app: dadjokes
+    spec:
+      containers:
+      - name: flask
+        image: maxlieb/dadjokes-ntfy
+        ports:
+        - containerPort: 5000
+        env:
+        - name: JOKE_LIMIT
+          value: "20"
+        - name: NTFY_TOPIC
+          value: "dadjokes-max-bido19-midproj"   # hard-coded topic by default
+        - name: MAX_RECORDS
+          value: "30"
+        - name: NTFY_BASE
+          value: "https://ntfy.sh"
+        # - name: NTFY_AUTH
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: ntfy-secret
+        #       key: token
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+      restartPolicy: Always
