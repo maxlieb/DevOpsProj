@@ -143,3 +143,5 @@ curl -X POST http://dadjokes-service/reset
 ## Notes
 - **Public ntfy (`ntfy.sh`) is open**: anyone knowing the topic can read/write. Use a unique topic; for stability use your private ntfy and `NTFY_AUTH`.
 - DB is pruned to **30** on every save to keep messages small.
+
+<!-- Trigger GitHub Actions -->
