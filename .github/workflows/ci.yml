@@ -47,11 +47,17 @@ jobs:
 
       - name: Run container (for health check)
         run: |
-          docker run -d --rm -p 5000:5000 --name dadjokes-container ${{ env.IMAGE_NAME }}:ci
+          SUFFIX=$(openssl rand -hex 4)
+          echo "NTFY_TOPIC=dadjokes-api-ci-test-${SUFFIX}" >> $GITHUB_ENV
+          docker run -d --rm \
+            -p 5000:5000 \
+            --name dadjokes-container \
+            -e NTFY_TOPIC="dadjokes-api-ci-test-${SUFFIX}" \
+            ${{ env.IMAGE_NAME }}:ci
 
       - name: Wait for app & test /health
         run: |
-          # Simple retry loop instead of fixed sleep
+          echo "Using NTFY_TOPIC=${NTFY_TOPIC}"
           for i in {1..20}; do
             if curl -fsS http://localhost:5000/health; then
               echo "Health check passed"
