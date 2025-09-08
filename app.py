@@ -7,7 +7,7 @@ from collections import OrderedDict
 # ============== Config ==============
 # Environment variables (can be overridden when running in Docker/K8s)
 NTFY_BASE   = os.getenv("NTFY_BASE", "https://ntfy.sh").rstrip("/")  # base URL of ntfy server
-NTFY_TOPIC  = os.getenv("NTFY_TOPIC", "dadjokes-max-bido19-midproj")  # topic name for storing messages
+NTFY_TOPIC  = os.getenv("NTFY_TOPIC", "dadjokes-api")  # topic name for storing messages
 NTFY_SINCE  = os.getenv("NTFY_SINCE", "72h")  # how far back to fetch existing db
 NTFY_AUTH   = os.getenv("NTFY_AUTH")  # optional Bearer token for ntfy
 JOKE_LIMIT  = int(os.getenv("JOKE_LIMIT", "20"))  # how many jokes to fetch from Reddit
