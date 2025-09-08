@@ -110,13 +110,34 @@ jobs:
             "http://localhost:5000/jokes/${{ steps.add.outputs.id }}")
           echo "$UPD" | jq -e '.title == "CI updated" and .body == "Updated body"'
 
-      - name: Delete joke (DELETE /jokes/<id>)
+      - name: Delete joke (DELETE /jokes/<id>) and verify gone (with retry)
         run: |
-          curl -fsS -X DELETE "http://localhost:5000/jokes/${{ steps.add.outputs.id }}" \
-            | jq -e --arg id "${{ steps.add.outputs.id }}" '.status == "deleted" and .id == $id'
-          # Ensure it's really gone
-          code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:5000/jokes/${{ steps.add.outputs.id }}")
-          test "$code" = "404"
+          set -euo pipefail
+          ID="${{ steps.add.outputs.id }}"
+
+          echo "Deleting $ID…"
+          curl -fsS -X DELETE "http://localhost:5000/jokes/${ID}" \
+            | jq -e --arg id "$ID" '.status == "deleted" and .id == $id'
+
+          # Now verify it disappears from reads; ntfy can lag slightly, so retry.
+          ATTEMPTS=12   # ~24s total
+          SLEEP=2
+          for i in $(seq 1 $ATTEMPTS); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:5000/jokes/${ID}")
+            if [ "$code" = "404" ]; then
+              echo "Confirmed: GET /jokes/$ID -> 404"
+              exit 0
+            fi
+            echo "Still visible (HTTP $code). Retrying... ($i/$ATTEMPTS)"
+            sleep "$SLEEP"
+          done
+
+          echo "Failed to observe 404 after delete. Dumping diagnostics…"
+          echo "--- /jokes ---"
+          curl -fsS "http://localhost:5000/jokes" || true
+          echo "--- container logs ---"
+          docker logs dadjokes-container || true
+          exit 1
 
       - name: Reset DB (POST /reset)
         run: |
