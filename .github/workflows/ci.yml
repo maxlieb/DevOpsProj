@@ -55,17 +55,60 @@ jobs:
             -e NTFY_TOPIC="dadjokes-api-ci-test-${SUFFIX}" \
             ${{ env.IMAGE_NAME }}:ci
 
-      - name: Wait for app & test /health
+      - name: Install jq (for JSON parsing)
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Smoke test /health
         run: |
-          echo "Using NTFY_TOPIC=${NTFY_TOPIC}"
-          for i in {1..20}; do
-            if curl -fsS http://localhost:5000/health; then
-              echo "Health check passed"
-              exit 0
-            fi
-            echo "Waiting for app... ($i/20)"; sleep 1
-          done
-          echo "Health check FAILED"; docker logs dadjokes-container || true; exit 1
+          curl -fsS http://localhost:5000/health | jq -e '.ok == true'
+          # Also check the topic matches the env we set
+          curl -fsS http://localhost:5000/health | jq -e --arg t "$NTFY_TOPIC" '.topic == $t'
+
+      - name: Add custom joke (POST /jokes)
+        id: add
+        run: |
+          NEW=$(curl -fsS -X POST -H "Content-Type: application/json" \
+            -d '{"title":"CI says hi","body":"This is only a test"}' \
+            http://localhost:5000/jokes)
+          echo "$NEW" | jq .
+          ID=$(echo "$NEW" | jq -r '.id')
+          test "$ID" != "null" -a -n "$ID"
+          echo "id=$ID" >> $GITHUB_OUTPUT
+
+      - name: List jokes (GET /jokes) and assert our ID is present
+        run: |
+          curl -fsS "http://localhost:5000/jokes" | jq -e --arg id "${{ steps.add.outputs.id }}" \
+            'map(.id) | index($id) != null'
+
+      - name: Get by id (GET /jokes/<id>)
+        run: |
+          curl -fsS "http://localhost:5000/jokes/${{ steps.add.outputs.id }}" \
+            | jq -e --arg id "${{ steps.add.outputs.id }}" '.id == $id'
+
+      - name: Update joke (PUT /jokes/<id>)
+        run: |
+          UPD=$(curl -fsS -X PUT -H "Content-Type: application/json" \
+            -d '{"title":"CI updated","body":"Updated body"}' \
+            "http://localhost:5000/jokes/${{ steps.add.outputs.id }}")
+          echo "$UPD" | jq -e '.title == "CI updated" and .body == "Updated body"'
+
+      - name: Delete joke (DELETE /jokes/<id>)
+        run: |
+          curl -fsS -X DELETE "http://localhost:5000/jokes/${{ steps.add.outputs.id }}" \
+            | jq -e --arg id "${{ steps.add.outputs.id }}" '.status == "deleted" and .id == $id'
+          # Ensure it's really gone
+          code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:5000/jokes/${{ steps.add.outputs.id }}")
+          test "$code" = "404"
+
+      - name: Reset DB (POST /reset)
+        run: |
+          curl -fsS -X POST http://localhost:5000/reset | jq -e '.status == "reset"'
+
+      # Optional/fragile: hits Reddit and writes to ntfy; don't fail the build if it flakes
+      - name: OPTIONAL — fetch Reddit and store (GET /)
+        continue-on-error: true
+        run: |
+          curl -fsS http://localhost:5000/ | jq .
 
       - name: Stop container
         if: always()
