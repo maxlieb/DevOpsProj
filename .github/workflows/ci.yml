@@ -75,10 +75,28 @@ jobs:
           test "$ID" != "null" -a -n "$ID"
           echo "id=$ID" >> $GITHUB_OUTPUT
 
-      - name: List jokes (GET /jokes) and assert our ID is present
-        run: |
-          curl -fsS "http://localhost:5000/jokes" | jq -e --arg id "${{ steps.add.outputs.id }}" \
-            'map(.id) | index($id) != null'
+	- name: List jokes (GET /jokes) and assert our ID is present (with retry)
+	  run: |
+		set -euo pipefail
+		ATTEMPTS=12         # total ~24s
+		SLEEP=2
+		for i in $(seq 1 $ATTEMPTS); do
+		  echo "Attempt $i/$ATTEMPTS…"
+		  if curl -fsS "http://localhost:5000/jokes" \
+			| jq -e --arg id "${{ steps.add.outputs.id }}" 'map(.id) | index($id) != null'
+		  then
+			echo "✅ ID found in /jokes"
+			exit 0
+		  fi
+		  sleep "$SLEEP"
+		done
+
+		echo "❌ ID not found after $ATTEMPTS attempts. Dumping diagnostics…"
+		echo "--- /jokes response ---"
+		curl -fsS "http://localhost:5000/jokes" || true
+		echo "--- container logs ---"
+		docker logs dadjokes-container || true
+		exit 1
 
       - name: Get by id (GET /jokes/<id>)
         run: |
