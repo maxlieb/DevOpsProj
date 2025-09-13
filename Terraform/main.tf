@@ -1,7 +1,9 @@
-# terraform/main.tf
+# Terraform/main.tf
 
 terraform {
   required_version = ">= 1.0"
+
+  # NOTE: Remote backend is defined in Terraform/backend.tf
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -25,18 +27,24 @@ module "eks" {
   cluster_name    = var.cluster_name
   cluster_version = "1.29"
 
-  # VPC Configuration - let module create it
-  vpc_id                   = module.vpc.vpc_id
-  subnet_ids               = module.vpc.private_subnets
-  control_plane_subnet_ids = module.vpc.private_subnets
+  # Do NOT auto-grant cluster admin to the "creator" principal.
+  # We manage access explicitly via 'access_entries'.
+  enable_cluster_creator_admin_permissions = false
 
-  # Grant admin permissions to the cluster creator principal
-  enable_cluster_creator_admin_permissions = true
-
-  # Also grant cluster admin to the GitHub Actions OIDC role (for kubectl/apply from CI)
+  # Explicit cluster access entries
   access_entries = {
+    # GitHub Actions OIDC role (used by your workflow to run kubectl/apply)
     gha = {
       principal_arn = "arn:aws:iam::863518423554:role/GHA-Terraform-EKS"
+      policy_associations = [{
+        policy_arn  = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+        access_scope = { type = "cluster" }
+      }]
+    }
+
+    # Your personal IAM user (so you have kubectl access locally)
+    admin = {
+      principal_arn = "arn:aws:iam::863518423554:user/max"
       policy_associations = [{
         policy_arn  = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
         access_scope = { type = "cluster" }
@@ -49,18 +57,12 @@ module "eks" {
 
   # Essential add-ons only
   cluster_addons = {
-    coredns = {
-      most_recent = true
-    }
-    kube-proxy = {
-      most_recent = true
-    }
-    vpc-cni = {
-      most_recent = true
-    }
+    coredns    = { most_recent = true }
+    kube-proxy = { most_recent = true }
+    vpc-cni    = { most_recent = true }
   }
 
-  # Single node group matching your setup
+  # Single managed node group
   eks_managed_node_groups = {
     default = {
       instance_types = ["t3.small"]
