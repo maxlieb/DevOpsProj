@@ -33,6 +33,17 @@ module "eks" {
   # Grant admin permissions to the cluster creator principal
   enable_cluster_creator_admin_permissions = true
 
+  # Also grant cluster admin to the GitHub Actions OIDC role (for kubectl/apply from CI)
+  access_entries = {
+    gha = {
+      principal_arn = "arn:aws:iam::863518423554:role/GHA-Terraform-EKS"
+      policy_associations = [{
+        policy_arn  = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+        access_scope = { type = "cluster" }
+      }]
+    }
+  }
+
   # Simple cluster configuration
   cluster_endpoint_public_access = true
 
@@ -55,7 +66,7 @@ module "eks" {
       instance_types = ["t3.small"]
 
       min_size     = 0
-      max_size     = 2  
+      max_size     = 2
       desired_size = 1
 
       disk_size = 20
@@ -72,7 +83,7 @@ module "vpc" {
   cidr = "10.0.0.0/16"
 
   azs             = slice(data.aws_availability_zones.available.names, 0, 2)
-  private_subnets = ["10.0.1.0/24", "10.0.2.0/24"] 
+  private_subnets = ["10.0.1.0/24", "10.0.2.0/24"]
   public_subnets  = ["10.0.101.0/24", "10.0.102.0/24"]
 
   enable_nat_gateway = true
