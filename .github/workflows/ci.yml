@@ -244,7 +244,7 @@ jobs:
         run: kubectl apply -f $K8S_DIR/flask-service.yaml
 
       - name: Apply Deployment manifest (ensure exists)
-        run: kubectl apply -f $K8S_DIR/dadjokes-deployment.yaml
+        run: kubectl apply -f $K8S_DIR/flask-deployment.yaml
 
       - name: Set image to current SHA
         run: |
