@@ -249,7 +249,7 @@ jobs:
       - name: Set image to current SHA
         run: |
           kubectl set image deploy/$DEPLOYMENT_NAME \
-            $CONTAINER_NAME=$IMAGE_REPO:${{ github.sha }} --record
+            $CONTAINER_NAME=$IMAGE_REPO:latest --record
 
       - name: Wait for rollout
         run: kubectl rollout status deploy/$DEPLOYMENT_NAME --timeout=300s
