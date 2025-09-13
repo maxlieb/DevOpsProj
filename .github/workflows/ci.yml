@@ -6,8 +6,15 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  id-token: write   # required for GitHub OIDC -> AWS
+
 env:
   IMAGE_NAME: maxlieb/dadjokes-api
+  AWS_REGION: il-central-1
+  TF_WORKDIR: terraform
+  AWS_ROLE_TO_ASSUME: arn:aws:iam::<ACCOUNT_ID>:role/GHA-Terraform-EKS  # <-- replace
 
 jobs:
   build-test-and-push:
@@ -61,7 +68,6 @@ jobs:
       - name: Smoke test /health
         run: |
           curl -fsS http://localhost:5000/health | jq -e '.ok == true'
-          # Also check the topic matches the env we set
           curl -fsS http://localhost:5000/health | jq -e --arg t "$NTFY_TOPIC" '.topic == $t'
 
       - name: Add custom joke (POST /jokes)
@@ -78,10 +84,10 @@ jobs:
       - name: List jokes (GET /jokes) and assert our ID is present (with retry)
         run: |
           set -euo pipefail
-          ATTEMPTS=12         # total ~24s
+          ATTEMPTS=12
           SLEEP=2
           for i in $(seq 1 $ATTEMPTS); do
-            echo "Attempt $i/$ATTEMPTSâ€¦"
+            echo "Attempt $i/$ATTEMPTS…"
             if curl -fsS "http://localhost:5000/jokes" \
               | jq -e --arg id "${{ steps.add.outputs.id }}" 'map(.id) | index($id) != null'
             then
@@ -90,8 +96,7 @@ jobs:
             fi
             sleep "$SLEEP"
           done
-
-          echo "ID not found after $ATTEMPTS attempts. Dumping diagnosticsâ€¦"
+          echo "ID not found after retries. Dumping diagnostics…"
           echo "--- /jokes response ---"
           curl -fsS "http://localhost:5000/jokes" || true
           echo "--- container logs ---"
@@ -114,13 +119,10 @@ jobs:
         run: |
           set -euo pipefail
           ID="${{ steps.add.outputs.id }}"
-
-          echo "Deleting $IDâ€¦"
+          echo "Deleting $ID…"
           curl -fsS -X DELETE "http://localhost:5000/jokes/${ID}" \
             | jq -e --arg id "$ID" '.status == "deleted" and .id == $id'
-
-          # Now verify it disappears from reads; ntfy can lag slightly, so retry.
-          ATTEMPTS=12   # ~24s total
+          ATTEMPTS=12
           SLEEP=2
           for i in $(seq 1 $ATTEMPTS); do
             code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:5000/jokes/${ID}")
@@ -131,8 +133,7 @@ jobs:
             echo "Still visible (HTTP $code). Retrying... ($i/$ATTEMPTS)"
             sleep "$SLEEP"
           done
-
-          echo "Failed to observe 404 after delete. Dumping diagnosticsâ€¦"
+          echo "Failed to observe 404 after delete. Dumping diagnostics…"
           echo "--- /jokes ---"
           curl -fsS "http://localhost:5000/jokes" || true
           echo "--- container logs ---"
@@ -143,7 +144,6 @@ jobs:
         run: |
           curl -fsS -X POST http://localhost:5000/reset | jq -e '.status == "reset"'
 
-      # Optional/fragile: hits Reddit and writes to ntfy; don't fail the build if it flakes
       - name: OPTIONAL - fetch Reddit and store (GET /)
         continue-on-error: true
         run: |
@@ -153,14 +153,14 @@ jobs:
         if: always()
         run: docker stop dadjokes-container || true
 
-      # Log in to Docker Hub (requires repo secrets)
+      # Docker Hub login (requires secrets)
       - name: Docker Hub login
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Build again (using cache) and push with proper tags/labels
+      # Build again and push with proper tags/labels
       - name: Build & Push
         uses: docker/build-push-action@v5
         with:
@@ -174,3 +174,39 @@ jobs:
       - name: Show published tags
         run: echo "${{ steps.meta.outputs.tags }}"
 
+  terraform-eks:
+    name: Terraform (EKS infra)
+    runs-on: ubuntu-latest
+    needs: build-test-and-push    # run only if build/tests passed
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKDIR }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-terraform-dadjokes
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.7
+
+      - name: Terraform init
+        run: terraform init
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan (output to log)
+        run: terraform plan -input=false -var-file="terraform.tfvars" -no-color
+
+      # Apply on push to main (this workflow only triggers on main anyway)
+      - name: Terraform apply
+        run: terraform apply -input=false -auto-approve -var-file="terraform.tfvars"
