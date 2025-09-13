@@ -13,8 +13,8 @@ permissions:
 env:
   IMAGE_NAME: maxlieb/dadjokes-api
   AWS_REGION: il-central-1
-  TF_WORKDIR: terraform
-  AWS_ROLE_TO_ASSUME: arn:aws:iam::<ACCOUNT_ID>:role/GHA-Terraform-EKS  # <-- replace
+  TF_WORKDIR: Terraform
+  AWS_ROLE_TO_ASSUME: arn:aws:iam::863518423554:role/GHA-Terraform-EKS  # <-- replace
 
 jobs:
   build-test-and-push:
