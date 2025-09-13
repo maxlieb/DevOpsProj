@@ -27,6 +27,11 @@ module "eks" {
   cluster_name    = var.cluster_name
   cluster_version = "1.29"
 
+  # VPC Configuration - let module create it
+  vpc_id                   = module.vpc.vpc_id
+  subnet_ids               = module.vpc.private_subnets
+  control_plane_subnet_ids = module.vpc.private_subnets
+
   # Do NOT auto-grant cluster admin to the "creator" principal.
   # We manage access explicitly via 'access_entries'.
   enable_cluster_creator_admin_permissions = false
