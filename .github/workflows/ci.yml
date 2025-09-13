@@ -8,13 +8,13 @@ on:
 
 permissions:
   contents: read
-  id-token: write   # required for GitHub OIDC -> AWS
+  id-token: write  # required for GitHub OIDC -> AWS
 
 env:
   IMAGE_NAME: maxlieb/dadjokes-api
   AWS_REGION: il-central-1
   TF_WORKDIR: Terraform
-  AWS_ROLE_TO_ASSUME: arn:aws:iam::863518423554:role/GHA-Terraform-EKS  # <-- replace
+  AWS_ROLE_TO_ASSUME: arn:aws:iam::863518423554:role/GHA-Terraform-EKS
 
 jobs:
   build-test-and-push:
@@ -177,7 +177,7 @@ jobs:
   terraform-eks:
     name: Terraform (EKS infra)
     runs-on: ubuntu-latest
-    needs: build-test-and-push    # run only if build/tests passed
+    needs: build-test-and-push
     defaults:
       run:
         working-directory: ${{ env.TF_WORKDIR }}
@@ -207,7 +207,6 @@ jobs:
       - name: Terraform plan (output to log)
         run: terraform plan -input=false -var-file="terraform.tfvars" -no-color
 
-      # Apply on push to main (this workflow only triggers on main anyway)
       - name: Terraform apply
         run: terraform apply -input=false -auto-approve -var-file="terraform.tfvars"
 
@@ -221,45 +220,41 @@ jobs:
       CLUSTER_NAME: dadjokes-eks
       K8S_DIR: k8s
       DEPLOYMENT_NAME: dadjokes-deployment
-      CONTAINER_NAME: dadjokes   # ?? ???? ?? 'flask'—???? ??? ?-flask
+      CONTAINER_NAME: dadjokes
       IMAGE_REPO: maxlieb/dadjokes-api
+
     steps:
       - name: Checkout
-      - uses: actions/checkout@v4
-  
+        uses: actions/checkout@v4
+
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: gha-deploy
-  
+
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
-  
+
       - name: Update kubeconfig
         run: aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME
-  
-      # ?????/????? ?? ?-Service (LB ??????)
+
       - name: Apply Service
         run: kubectl apply -f $K8S_DIR/flask-service.yaml
-  
-      # ?????/????? ?? ?-Deployment (?? ?? ???? ?????)
+
       - name: Apply Deployment manifest (ensure exists)
         run: kubectl apply -f $K8S_DIR/dadjokes-deployment.yaml
-  
-      # ????? ????? ????? ?-build ?????? (SHA) – ?????????? ???? ?'latest'
+
       - name: Set image to current SHA
         run: |
           kubectl set image deploy/$DEPLOYMENT_NAME \
             $CONTAINER_NAME=$IMAGE_REPO:${{ github.sha }} --record
-  
+
       - name: Wait for rollout
         run: kubectl rollout status deploy/$DEPLOYMENT_NAME --timeout=300s
-  
+
       - name: Show Service external hostname
         run: |
           echo -n "LB DNS: "
           kubectl get svc dadjokes-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'; echo
-  
-  
