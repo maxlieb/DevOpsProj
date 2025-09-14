@@ -1,20 +1,21 @@
 from flask import Flask, jsonify, request, Response
-import os, json, random, requests, socket, time
+import os, json, random, requests, socket
 from datetime import datetime
 from uuid import uuid4
 from collections import OrderedDict
 
 # ============== Config ==============
 # Environment variables (can be overridden when running in Docker/K8s)
-NTFY_BASE   = os.getenv("NTFY_BASE", "https://ntfy.sh").rstrip("/")  # base URL of ntfy server
-NTFY_TOPIC  = os.getenv("NTFY_TOPIC", "dadjokes-api")  # topic name for storing messages
-NTFY_SINCE  = os.getenv("NTFY_SINCE", "72h")  # how far back to fetch existing db
-NTFY_AUTH   = os.getenv("NTFY_AUTH")  # optional Bearer token for ntfy
-JOKE_LIMIT  = int(os.getenv("JOKE_LIMIT", "20"))  # how many jokes to fetch from Reddit
-MAX_RECORDS = int(os.getenv("MAX_RECORDS", "30"))  # max jokes stored in db
+NTFY_BASE   = os.getenv("NTFY_BASE", "https://ntfy.sh").rstrip("/")   # base URL of ntfy server
+NTFY_TOPIC  = os.getenv("NTFY_TOPIC", "dadjokes-api")                 # topic name for storing messages
+NTFY_SINCE  = os.getenv("NTFY_SINCE", "72h")                          # how far back to fetch existing db
+NTFY_AUTH   = os.getenv("NTFY_AUTH")                                  # optional Bearer token for ntfy
+MAX_RECORDS = int(os.getenv("MAX_RECORDS", "30"))                     # max jokes stored in db
 
-REDDIT_BASE = "https://www.reddit.com/r/dadjokes"
-REDDIT_UA   = {"User-agent": "DadJokeBot 1.0"}  # required to avoid Reddit API blocking
+# Joke providers (no OAuth)
+JOKES_PROVIDER = os.getenv("JOKES_PROVIDER", "icanhaz")               # icanhaz | jokeapi | official
+JOKES_UA       = os.getenv("JOKES_UA", "dadjokes-app/1.0 (eks)")
+JOKES_TIMEOUT  = int(os.getenv("JOKES_TIMEOUT", "8"))
 
 DB_TITLE = "dadjokes-db"  # used as a marker to identify database messages in ntfy
 
@@ -61,7 +62,8 @@ def load_db():
     latest = None
     # Stream messages until we find the latest DB entry
     for line in r.iter_lines(decode_unicode=True):
-        if not line: continue
+        if not line:
+            continue
         try:
             evt = json.loads(line)
         except Exception:
@@ -89,30 +91,67 @@ def make_item(title, body, source, created_at=None):
         ("id", str(uuid4())),
     ])
 
-# Fetch one random top joke from Reddit r/dadjokes
-def fetch_one_reddit():
-    url = f"{REDDIT_BASE}/top.json?t=day&limit={JOKE_LIMIT}"
-    r = requests.get(url, headers=REDDIT_UA, timeout=8)
+# ============== External joke providers (no OAuth) ==============
+
+def fetch_one_joke_icanhaz():
+    """Primary: icanhazdadjoke.com (simple, stable)."""
+    r = requests.get(
+        "https://icanhazdadjoke.com/",
+        headers={"Accept": "application/json", "User-Agent": JOKES_UA},
+        timeout=JOKES_TIMEOUT,
+    )
     r.raise_for_status()
-    children = r.json().get("data", {}).get("children", [])
-    if not children:
-        raise RuntimeError("No posts from Reddit")
-    d = random.choice(children)["data"]
-    return d.get("title","No title"), d.get("selftext","") or ""
+    j = r.json()
+    title = "Dad joke"
+    body = j.get("joke", "").strip()
+    if not body:
+        raise RuntimeError("icanhazdadjoke returned empty")
+    return title, body
 
-# Convert UNIX timestamp to ISO8601
-def to_iso(ts):
-    try:
-        return datetime.utcfromtimestamp(float(ts)).isoformat(timespec="seconds") + "Z"
-    except Exception:
-        return now_iso()
+def fetch_one_joke_jokeapi():
+    """Fallback 1: JokeAPI (Sv443)."""
+    r = requests.get(
+        "https://v2.jokeapi.dev/joke/Programming,Pun?type=single&blacklistFlags=nsfw,sexist,explicit",
+        headers={"User-Agent": JOKES_UA},
+        timeout=JOKES_TIMEOUT,
+    )
+    r.raise_for_status()
+    j = r.json()
+    if j.get("type") == "single":
+        return "JokeAPI", j.get("joke", "").strip()
+    # two-part fallback
+    return "JokeAPI", f'{j.get("setup","").strip()} {j.get("delivery","").strip()}'.strip()
 
-# Find index of item in list by id
-def find_index(items, id_):
-    for i, x in enumerate(items):
-        if x.get("id") == id_:
-            return i
-    return -1
+def fetch_one_joke_official():
+    """Fallback 2: Official Joke API."""
+    r = requests.get("https://official-joke-api.appspot.com/jokes/random", timeout=JOKES_TIMEOUT)
+    r.raise_for_status()
+    j = r.json()
+    return j.get("setup","Joke").strip(), j.get("punchline","").strip()
+
+def fetch_one_joke():
+    """
+    Unified wrapper used by the app.
+    Tries the configured provider, then fallbacks (icanhaz -> jokeapi -> official).
+    """
+    providers = {
+        "icanhaz": fetch_one_joke_icanhaz,
+        "jokeapi": fetch_one_joke_jokeapi,
+        "official": fetch_one_joke_official,
+    }
+    order = [JOKES_PROVIDER, "icanhaz", "jokeapi", "official"]
+    tried = set()
+    for name in order:
+        fn = providers.get(name)
+        if not fn or name in tried:
+            continue
+        tried.add(name)
+        try:
+            return fn()
+        except Exception:
+            pass
+    # If all failed:
+    return "No jokes right now", ""
 
 # ============== Routes ==============
 # Healthcheck endpoint
@@ -120,19 +159,19 @@ def find_index(items, id_):
 def health():
     return jsonify({"ok": True, "topic": NTFY_TOPIC}), 200
 
-# GET / → Fetch a new joke from Reddit and store it
+# GET / ? Fetch a new joke from providers and store it
 @app.get("/")
-def reddit_and_store():
+def external_and_store():
     try:
-        title, body = fetch_one_reddit()
+        title, body = fetch_one_joke()
         db = load_db()
-        db["items"].insert(0, make_item(title, body, "reddit"))
+        db["items"].insert(0, make_item(title, body, "external"))
         save_db(db)
         return Response(json.dumps(db["items"][0], indent=2), mimetype="application/json"), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# POST /jokes → Add custom joke
+# POST /jokes ? Add custom joke
 def add_custom():
     d = request.get_json(silent=True) or {}
     if not d.get("title") or not d.get("body"):
@@ -145,7 +184,7 @@ def add_custom():
 
 app.add_url_rule("/jokes", view_func=add_custom, methods=["POST"])
 
-# GET /jokes → List jokes (optionally filter by date range)
+# GET /jokes ? List jokes (optionally filter by date range)
 @app.get("/jokes")
 def list_jokes():
     frm = request.args.get("from")
@@ -156,7 +195,7 @@ def list_jokes():
     if to:  items = [x for x in items if x.get("created_at","") <= to]
     return Response(json.dumps(prune(items), indent=2), mimetype="application/json"), 200
 
-# GET /jokes/<id> → Get joke by ID
+# GET /jokes/<id> ? Get joke by ID
 @app.get("/jokes/<id_>")
 def get_by_id(id_):
     db = load_db()
@@ -165,7 +204,7 @@ def get_by_id(id_):
             return Response(json.dumps(x, indent=2), mimetype="application/json"), 200
     return jsonify({"error": "not found"}), 404
 
-# DELETE /jokes/<id> → Delete joke by ID
+# DELETE /jokes/<id> ? Delete joke by ID
 @app.delete("/jokes/<id_>")
 def delete_by_id(id_):
     db = load_db()
@@ -176,26 +215,30 @@ def delete_by_id(id_):
     save_db(db)
     return jsonify({"status": "deleted", "id": id_}), 200
 
-# PUT /jokes/<id> → Update existing joke (replace or update fields)
+# PUT /jokes/<id> ? Update existing joke (replace or update fields)
 @app.put("/jokes/<id_>")
 def update_joke(id_):
     d = request.get_json(silent=True) or {}
     db = load_db()
-    i = find_index(db.get("items", []), id_)
+    i = next((idx for idx, x in enumerate(db.get("items", [])) if x.get("id") == id_), -1)
     if i == -1:
         return jsonify({"error": "not found"}), 404
+
     x = db["items"][i]
     if d.get("reddit"):
-        # Replace with a new Reddit joke
-        title, body = fetch_one_reddit()
-        x.update({"title": title, "body": body, "source": "reddit"})
+        # Backward-compatible flag: fetch a fresh external joke (no Reddit).
+        title, body = fetch_one_joke()
+        x.update({"title": title, "body": body, "source": "external"})
     else:
         # Update with custom values
         if not ("title" in d or "body" in d):
             return jsonify({"error": "provide title/body or set reddit=true"}), 400
-        if "title" in d and d["title"] is not None: x["title"] = d["title"]
-        if "body" in d and d["body"] is not None:   x["body"]  = d["body"]
+        if "title" in d and d["title"] is not None:
+            x["title"] = d["title"]
+        if "body" in d and d["body"] is not None:
+            x["body"]  = d["body"]
         x["source"] = "custom"
+
     # Always refresh pod name and timestamp
     x["pod_name"] = pod_name()
     x["created_at"] = now_iso()
@@ -203,7 +246,7 @@ def update_joke(id_):
     save_db(db)
     return Response(json.dumps(x, indent=2), mimetype="application/json"), 200
 
-# POST /reset → Reset the DB (clears all jokes)
+# POST /reset ? Reset the DB (clears all jokes)
 @app.post("/reset")
 def reset_db():
     db = empty_db()
@@ -213,4 +256,3 @@ def reset_db():
 # Run server (Flask)
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
-
