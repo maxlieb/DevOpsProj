@@ -188,17 +188,17 @@ This project provisions an **AWS EKS cluster** along with a minimal **VPC setup*
 
 ```bash
 terraform init
-
-2. **Plan the deployment** (preview changes):
+```
+2. **Plan the deployment** 
 
 ```bash
 terraform plan
-
+```
 3. **Apply the configuration
 ```bash
 terraform apply
-
+```
 4. **Configure kubectl to access the cluster
 ```bash
 aws eks update-kubeconfig --region <region> --name <cluster_name>
-
+```
