@@ -194,11 +194,11 @@ terraform init
 ```bash
 terraform plan
 ```
-3. **Apply the configuration
+3. **Apply the configuration**
 ```bash
 terraform apply
 ```
-4. **Configure kubectl to access the cluster
+4. **Configure kubectl to access the cluster**
 ```bash
-aws eks update-kubeconfig --region <region> --name <cluster_name>
+aws eks update-kubeconfig --region il-central-1 --name dadjokes-eks
 ```
