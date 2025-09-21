@@ -1,4 +1,4 @@
-# DadJokes API — Final Project (DevOps Course)
+# DadJokes API  Final Project (DevOps Course)
 
 **DadJokes API** is the final project for a DevOps course, demonstrating API handling, state management, and integration with DevOps tools like Docker, Kubernetes, and Terraform.  
 
