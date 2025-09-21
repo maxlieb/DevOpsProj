@@ -1,12 +1,20 @@
-# DadJokes (ntfy backend) — Mini Project
+# DadJokes API — Final Project (DevOps Course)
 
-Flask app that fetches dad jokes from Reddit or accepts custom jokes, and stores the **entire DB** as a single JSON message in an **ntfy** topic (no local disk/DB). Designed for learning demos.
+**DadJokes API** is the final project for a DevOps course, demonstrating API handling, state management, and integration with DevOps tools like Docker, Kubernetes, and Terraform.  
+
+This Flask application fetches dad jokes from external sources or accepts custom jokes, storing the **entire database** as a single JSON message in an **ntfy** topic — no local disk or database is required. Designed as a learning demo.
 
 ## Features
-- Store & load DB via **ntfy topic** (last-writer-wins).
-- Auto-prune DB to **max 30 jokes** (newest kept).
-- Endpoints: create, list, get by ID, update (manual or replace from Reddit), delete, reset, health.
-- Each joke: `id`, `title`, `body`, `source`, `pod_name`, `created_at`.
+- Fetch external jokes and store them automatically in an **ntfy topic**
+- Full CRUD support for custom jokes:
+  - **Create** – POST /jokes  
+  - **Read** – GET /jokes, GET /jokes/<id>  
+  - **Update** – PUT /jokes/<id> (manual or fetch new external joke)  
+  - **Delete** – DELETE /jokes/<id>  
+- **Reset** the database – POST /reset
+- Healthcheck endpoint – GET /health
+- Auto-prune to **max 30 jokes** (newest kept)
+- Each joke contains: `id`, `title`, `body`, `source`, `pod_name`, `created_at`
 
 ## Quick Start (Docker)
 ```bash
