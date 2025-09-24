@@ -225,8 +225,6 @@ This project includes an automated **CI/CD pipeline** built with **GitHub Action
 
 ### Workflow Overview
 
-```mermaid
-flowchart LR
     A[Push to main] --> B[Build Docker image]
     B --> C[Run tests (smoke/e2e)]
     C --> D[Push image to Docker Hub]
@@ -267,8 +265,8 @@ jobs:
 
 To run the GitHub Actions CI/CD pipeline, you need to configure the following **secrets** in your repository settings (`Settings → Secrets → Actions`):
 
-|Your Docker Hub username. Used to log in and push Docker images. |
-|Your Docker Hub access token or password. Keep it secret! |
+|Your Docker Hub username. Used to log in and push Docker images
+|Your Docker Hub access token or password. Keep it secret
  The AWS IAM Role ARN used by GitHub Actions to run Terraform and deploy to EKS. Example: `arn:aws:iam::863518423554:role/GHA-Terraform-EKS`. |
 
 > **Note:** These secrets allow the workflow to securely access Docker Hub and AWS without exposing credentials in the repository.
