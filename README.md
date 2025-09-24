@@ -207,7 +207,7 @@ aws eks update-kubeconfig --region il-central-1 --name dadjokes-eks
 
 This project includes an automated **CI/CD pipeline** built with **GitHub Actions**, covering:
 
-- **CI (Continuous Integration)**:  
+ **CI (Continuous Integration)**:  
   Build the Docker image, run the container locally in the workflow, and perform **end-to-end smoke tests**:
   - `/health` check  
   - `POST /jokes` → validate response  
@@ -216,12 +216,15 @@ This project includes an automated **CI/CD pipeline** built with **GitHub Action
   - `DELETE /jokes/<id>` → verify removal  
   - `POST /reset` → reset DB  
 
-- **CD (Continuous Deployment)**:  
-  After tests pass, the pipeline:
-  1. Pushes the Docker image to **Docker Hub** with multiple tags (latest, SHA, branch).  
-  2. Provisions/updates infrastructure with **Terraform** (EKS cluster on AWS).  
-  3. Deploys the latest image to **Kubernetes** (EKS) using `kubectl apply` and `kubectl set image`.  
-  4. Waits for rollout completion and prints the external LoadBalancer DNS.  
+ **CD (Continuous Deployment)**:
+
+    After tests pass, the pipeline:
+
+    1. Pushes the Docker image to **Docker Hub** with multiple tags (latest, SHA, branch).  
+    2. Provisions/updates infrastructure with **Terraform** (EKS cluster on AWS).  
+    3. Deploys the latest image to **Kubernetes** (EKS) using `kubectl apply` and `kubectl set image`.  
+    4. Waits for rollout completion and prints the external LoadBalancer DNS.
+
 
 ### Workflow Overview
 
@@ -260,13 +263,16 @@ jobs:
         with:
           push: true
           tags: maxlieb/dadjokes-api:latest
+```
 
 ### Secrets & Configuration
 
 To run the GitHub Actions CI/CD pipeline, you need to configure the following **secrets** in your repository settings (`Settings → Secrets → Actions`):
 
-|Your Docker Hub username. Used to log in and push Docker images
-|Your Docker Hub access token or password. Keep it secret
- The AWS IAM Role ARN used by GitHub Actions to run Terraform and deploy to EKS. Example: `arn:aws:iam::863518423554:role/GHA-Terraform-EKS`. |
+| Secret Name             | Description |
+|-------------------------|-------------|
+| `DOCKERHUB_USERNAME`    | Your Docker Hub username. Used to log in and push Docker images. |
+| `DOCKERHUB_TOKEN`       | Your Docker Hub access token or password. Keep it secret! |
+| `AWS_ROLE_TO_ASSUME`    | The AWS IAM Role ARN used by GitHub Actions to run Terraform and deploy to EKS. Example: `arn:aws:iam::863518423554:role/GHA-Terraform-EKS`. |
 
 > **Note:** These secrets allow the workflow to securely access Docker Hub and AWS without exposing credentials in the repository.
