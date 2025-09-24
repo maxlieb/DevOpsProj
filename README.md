@@ -216,9 +216,8 @@ This project includes an automated **CI/CD pipeline** built with **GitHub Action
   - `DELETE /jokes/<id>` → verify removal  
   - `POST /reset` → reset DB  
 
-- **CD (Continuous Deployment)**:  
-  After tests pass, the pipeline:
-  
+- **CD (Continuous Deployment)**:
+  After tests pass, the pipeline:    
   1. Pushes the Docker image to **Docker Hub** with multiple tags (latest, SHA, branch).  
   2. Provisions/updates infrastructure with **Terraform** (EKS cluster on AWS).  
   3. Deploys the latest image to **Kubernetes** (EKS) using `kubectl apply` and `kubectl set image`.  
