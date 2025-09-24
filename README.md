@@ -152,7 +152,7 @@ curl -X POST http://dadjokes-service/reset
 - **Public ntfy (`ntfy.sh`) is open**: anyone knowing the topic can read/write. Use a unique topic; for stability use your private ntfy and `NTFY_AUTH`.
 - DB is pruned to **30** on every save to keep messages small.
 
-# DadJokes EKS Terraform Project
+# DadJokes EKS Terraform 
 
 This project provisions an **AWS EKS cluster** along with a minimal **VPC setup** using **Terraform**. It is designed for learning and demo purposes, providing a ready-to-use Kubernetes environment with essential add-ons and a managed node group.
 
