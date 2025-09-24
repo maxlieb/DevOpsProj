@@ -207,7 +207,7 @@ aws eks update-kubeconfig --region il-central-1 --name dadjokes-eks
 
 This project includes an automated **CI/CD pipeline** built with **GitHub Actions**, covering:
 
-- **CI (Continuous Integration)**:  
+ **CI (Continuous Integration)**:  
   Build the Docker image, run the container locally in the workflow, and perform **end-to-end smoke tests**:
   - `/health` check  
   - `POST /jokes` → validate response  
@@ -216,7 +216,7 @@ This project includes an automated **CI/CD pipeline** built with **GitHub Action
   - `DELETE /jokes/<id>` → verify removal  
   - `POST /reset` → reset DB  
 
-- **CD (Continuous Deployment)**:
+ **CD (Continuous Deployment)**:
 
     After tests pass, the pipeline:
 
