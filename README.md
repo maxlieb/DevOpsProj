@@ -267,10 +267,8 @@ jobs:
 
 To run the GitHub Actions CI/CD pipeline, you need to configure the following **secrets** in your repository settings (`Settings → Secrets → Actions`):
 
-| Secret Name             | Description |
-|-------------------------|-------------|
-| `DOCKERHUB_USERNAME`    | Your Docker Hub username. Used to log in and push Docker images. |
-| `DOCKERHUB_TOKEN`       | Your Docker Hub access token or password. Keep it secret! |
-| `AWS_ROLE_TO_ASSUME`    | The AWS IAM Role ARN used by GitHub Actions to run Terraform and deploy to EKS. Example: `arn:aws:iam::863518423554:role/GHA-Terraform-EKS`. |
+|Your Docker Hub username. Used to log in and push Docker images. |
+|Your Docker Hub access token or password. Keep it secret! |
+ The AWS IAM Role ARN used by GitHub Actions to run Terraform and deploy to EKS. Example: `arn:aws:iam::863518423554:role/GHA-Terraform-EKS`. |
 
 > **Note:** These secrets allow the workflow to securely access Docker Hub and AWS without exposing credentials in the repository.
