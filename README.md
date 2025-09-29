@@ -343,3 +343,5 @@ To run the GitHub Actions CI/CD pipeline, you need to configure the following **
 
 > Note: These secrets allow the workflow to securely access Docker Hub and AWS without exposing credentials in the repository.
 >
+
+
